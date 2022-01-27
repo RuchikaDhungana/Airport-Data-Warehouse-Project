@@ -1,0 +1,98 @@
+----------------------------------------------------------------
+
+--DELETE STAGING FLIGHTS TABLE--
+DROP TABLE STAGE_FLIGHTS CASCADE CONSTRAINTS;
+
+--SEQUENCE FOR SURROGATE KEY--
+CREATE SEQUENCE STAGE_FLIGHT_SEQ INCREMENT BY 1 START WITH 1;
+
+--CREATE STAGING FLIGHTS TABLE--
+CREATE TABLE STAGE_FLIGHTS
+(
+flightKey INTEGER NOT NULL,
+flightNo  NUMBER(10,0), 
+year NUMBER(4,0), 
+month NUMBER(2,0), 
+day NUMBER(2,0),
+tailNo VARCHAR2(10), 
+dbSource VARCHAR(17),
+
+CONSTRAINTS pk_STAGE_FLIGHTS PRIMARY KEY (flightKey)
+)
+
+SELECT * FROM STAGE_FLIGHTS;
+
+-----------------------------------------------------------------
+--DROP STAGING COMPLAINTS TABLE--
+DROP TABLE STAGE_COMPLAINTS CASCADE CONSTRAINTS;
+
+--SEQUENCE FOR SURROGATE KEY--
+CREATE SEQUENCE STAGE_COMPLAINT_SEQ INCREMENT BY 1 START WITH 1;
+
+--CREATE STAGING COMPLAINTS TABLE--
+CREATE TABLE STAGE_COMPLAINTS
+(
+complaintKey INTEGER NOT NULL PRIMARY KEY,
+complaintID NUMBER(*,0),
+complaintType VARCHAR2(5), 
+description VARCHAR2(20),
+complaintStatus VARCHAR2(7), 
+flight_Key INTEGER NOT NULL,
+dbSource VARCHAR(17)
+)
+
+ALTER TABLE  STAGE_COMPLAINTS ADD CONSTRAINT "FK1_STG_COMPLAINT_TO_FLIGHT" FOREIGN KEY (flight_Key)
+	  REFERENCES  STAGE_FLIGHTS(flightKey);
+
+SELECT * FROM STAGE_COMPLAINTS;
+--------------------------------------------------------------------------------------
+
+--DELETE STAGING COMPENSATION TABLE--
+DROP TABLE STAGE_COMPENSATION CASCADE CONSTRAINTS;
+
+--SEQUENCE FOR SURROGATE KEY--
+CREATE SEQUENCE STAGE_COMPENSATION_SEQ INCREMENT BY 1 START WITH 1;
+
+--CREATE STAGING COMPENSATION TABLE--
+CREATE TABLE STAGE_COMPENSATION
+(
+compensationKey INTEGER NOT NULL,
+compensation_amnt NUMBER(*,0), 
+compensation_type VARCHAR2(8),
+flight_Key INTEGER NOT NULL,
+dbSource VARCHAR(17),
+
+CONSTRAINTS pk_STAGE_COMPENSATION PRIMARY KEY (compensationKey)
+)
+
+
+ALTER TABLE  STAGE_COMPENSATION ADD CONSTRAINT "FK1_STG_COMPENSATION_TO_FLIGHT" FOREIGN KEY (flight_Key)
+	  REFERENCES  STAGE_FLIGHTS(flightKey);
+
+SELECT * FROM STAGE_COMPENSATION;
+------------------------------------------------------------------------------------------------------
+--INSERT DATA INTO STAGING TABLES
+create or replace procedure STAGING_DATA_INSERT
+as 
+nextval NUMBER;
+begin
+
+        FOR i IN (SELECT * FROM FlyU_Flights) LOOP
+                 nextval := STAGE_FLIGHT_SEQ.nextval;
+                 INSERT INTO STAGE_FLIGHTS(flightKey, flightNo, year, month, day, tailNo, dbSource)
+                 VALUES(nextval, i.flight_number, i.flight_the_year, i.the_month, i.the_day, i.tail_number, 'flyU_flights_2020');
+       
+        FOR j IN (SELECT * FROM complaint WHERE flight_id_no=i.flight_number and the_year=i.flight_the_year and the_month=i.the_month and the_day=i.the_day) LOOP
+        	INSERT INTO STAGE_COMPLAINTS(complaintKey, complaintID, complaintType, description, complaintStatus, flight_Key, dbSource)
+                VALUES(STAGE_COMPLAINT_SEQ.NEXTVAL, j.complaint_id, j.complaint_type, j.description, j.complaint_status, nextval, 'flyU_flights_2020');
+                INSERT INTO STAGE_COMPENSATION(compensationKey, compensation_amnt, compensation_type, flight_Key, dbSource) 
+                VALUES(STAGE_COMPENSATION_SEQ.nextval, j.compensation_amnt, j.compensation_type, nextval, 'flyU_flights_2020');
+
+        END LOOP;
+
+    END LOOP;
+END;
+
+begin 
+STAGING_DATA_INSERT;
+end;

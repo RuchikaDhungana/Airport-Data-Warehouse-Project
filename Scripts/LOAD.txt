@@ -1,0 +1,63 @@
+ CREATE SEQUENCE   "DIM_TIME_SEQ"  MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1;
+truncate table dim_flights;
+truncate table dim_complaints;
+truncate table dim_compensation;
+truncate table dim_time;
+CREATE OR REPLACE PROCEDURE DIM_TABLE_INSERT
+as 
+	v_count NUMBER;
+BEGIN
+    FOR i IN (SELECT * FROM transform_flights) LOOP
+        INSERT INTO dim_flights(flightkey, flightno, tailno, dbsource) VALUES(i.flightkey, i.flightno, i.tailno, i.dbsource);
+
+        SELECT count(*) INTO v_count FROM dim_time WHERE year=i.year and month=i.month;
+
+        IF v_count=0   then
+        INSERT INTO dim_time(timeid, year, month) VALUES(DIM_TIME_SEQ.nextval, i.year, i.month);
+        end if;
+        FOR j IN (SELECT * FROM transform_complaint WHERE flight_key=i.flightkey) LOOP
+        	INSERT INTO dim_complaints(COMPLAINTKEY, COMPLAINTID, COMPLAINTTYPE, DESCRIPTION, COMPLAINTSTATUS, DBSOURCE) 
+               VALUES(j.COMPLAINT_KEY, j.COMPLAINT_ID, j.COMPLAINTTYPE, j.DESCRIPTION, j.COMPLAINTSTATUS, j.DBSOURCE );
+        END LOOP;
+       
+        FOR k IN (SELECT * FROM transform_compensation WHERE flight_key=i.flightkey) LOOP
+        	INSERT INTO dim_compensation (COMPENSATIONKEY, COMPENSATION_AMNT, COMPENSATION_TYPE, DBSOURCE) VALUES(k.COMPENSATIONKEY, k.COMPENSATION_AMNT, k.COMPENSATION_TYPE, k.DBSOURCE);
+        END LOOP;
+
+    END LOOP;
+END;
+
+INSERT INTO dim_time(timeid, year, month) VALUES(DIM_TIME_SEQ.nextval,2017, 10);
+BEGIN 
+DIM_TABLE_INSERT;
+END;
+-------------------------------------------------------------------------
+ CREATE SEQUENCE   "FACT_COMPLAINT_SEQ"  MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1;
+
+
+CREATE OR REPLACE PROCEDURE FACT_TABLE_INSERT
+as 
+BEGIN
+MERGE INTO FACT_COMPLAINTS fc
+USING (SELECT DISTINCT  dt.timeid,  cc.compensationkey, tc.complaint_key, tf.flightkey, SUM(tc.complaint_key) AS NOOFCOMPLAINTS, SUM(cc.compensationkey) as TOTALCOMPENSATION
+FROM transform_flights tf 
+JOIN transform_compensation cc ON(tf.flightkey=cc.flight_key)
+JOIN transform_complaint tc ON(tf.flightkey=tc.flight_key)
+JOIN dim_time dt ON(tf.year=dt.year)
+
+GROUP BY dt.timeid, tf.flightkey, tc.complaint_key, cc.compensationkey) d
+ON(fc.FK1_TIMEID=d.timeid AND fc.FK2_COMPENSATIONKEY=d.compensationkey AND fc.FK3_COMPLAINTKEY=d.complaint_key AND fc.FK4_FLIGHTKEY=d.flightkey)
+WHEN MATCHED THEN
+	UPDATE SET
+
+	fc.NOOFCOMPLAINTS=d.NOOFCOMPLAINTS,
+	fc.TOTALCOMPENSATION = d.TOTALCOMPENSATION 
+      
+WHEN NOT MATCHED THEN
+    INSERT
+    VALUES (FACT_COMPLAINT_SEQ.NEXTVAL, d.timeid, d.compensationkey,d.complaint_key, d.flightkey,  d.NOOFCOMPLAINTS, d.TOTALCOMPENSATION);
+END;
+truncate table fact_complaints;
+BEGIN 
+FACT_TABLE_INSERT;
+END;

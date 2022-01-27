@@ -1,0 +1,74 @@
+--CREATING BAD DATA TABLE FOR FLIGHTS TABLE--
+truncate table bad_flights;
+DROP table bad_flights CASCADE CONSTRAINTS;
+create table bad_flights
+(
+"BAD_ID" NUMBER(*,0) NOT NULL PRIMARY KEY, 
+	"FLIGHTKEY" NUMBER(*,0), 
+	"FLIGHTNO" NUMBER(10,0), 
+	"YEAR" NUMBER(4,0), 
+	"MONTH" NUMBER(2,0), 
+	"DAY" NUMBER(2,0), 
+	"TAILNO" VARCHAR2(10), 
+	"DBSOURCE" VARCHAR2(17), 
+	"ERROR_DESCRIPTION" VARCHAR2(15), 
+	"STATUS" VARCHAR2(10), 
+	"RESOLUTION_DATE" DATE	
+);
+-----------------------------------------------------
+--CREATING GOOD DATA TABLE FOR FLIGHTS TABLE--
+truncate table good_flights;
+DROP table good_flights CASCADE CONSTRAINTS;
+create table good_flights
+(
+FLIGHTKEY NUMBER NOT NULL PRIMARY KEY,
+"FLIGHTNO" NUMBER(10,0), 
+	"YEAR" NUMBER(4,0), 
+	"MONTH" NUMBER(2,0), 
+	"DAY" NUMBER(2,0), 
+	"TAILNO" VARCHAR2(10), 
+	"DBSOURCE" VARCHAR2(17)
+);
+------------------------------------------------------
+CREATE SEQUENCE   "BAD_FLIGHTS_SEQ"  MINVALUE 1 MAXVALUE 9999999999999999999999999999 INCREMENT BY 1 START WITH 1
+---------------------------------------------------------
+--CREATING PROCEDURE FOR BAD AND GOOD FLIGHTS TABLE DATA QUALIFICATION--
+
+create or replace procedure flights_data_quality_check (pv_rows OUT NUMBER)
+IS
+BEGIN
+pv_rows := 0;
+
+INSERT INTO bad_flights
+(
+SELECT BAD_FLIGHTS_SEQ.nextval, STAGE_FLIGHTS.FLIGHTKEY, STAGE_FLIGHTS.FLIGHTNO, STAGE_FLIGHTS.YEAR, STAGE_FLIGHTS.MONTH, STAGE_FLIGHTS.DAY, STAGE_FLIGHTS.TAILNO, STAGE_FLIGHTS.DBSOURCE, 'null values', 'not fixed', sysdate
+FROM STAGE_FLIGHTS
+WHERE FLIGHTNO IS NULL
+OR YEAR IS NULL
+OR MONTH IS NULL
+OR DAY IS NULL
+OR TAILNO IS NULL);
+pv_rows := TO_CHAR(SQL%RowCount);
+
+DELETE FROM good_flights;
+INSERT INTO good_flights 
+(
+SELECT * FROM STAGE_FLIGHTS
+WHERE FLIGHTNO IS NOT NULL
+OR YEAR IS NOT NULL
+OR MONTH IS NOT NULL
+OR DAY IS NOT NULL
+OR TAILNO IS NOT NULL);
+END;
+
+--------------------------------------------------------------
+
+--EXECUTE PROCEDURE--
+ 
+DECLARE 
+noOfRows NUMBER(5,2);
+
+BEGIN
+ flights_data_quality_check (noOfRows);
+DBMS_OUTPUT.PUT_LINE('No of bad data: '||noOfRows);
+END;

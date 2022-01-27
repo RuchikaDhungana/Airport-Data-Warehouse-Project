@@ -1,0 +1,103 @@
+--Reclean bad data in Complaint bad table--
+
+create or replace procedure reclean_complaint_bad_data(pv_rows OUT NUMBER)
+IS
+BEGIN
+pv_rows := 0;
+
+        update bad_complaints set DESCRIPTION ='unknown', STATUS ='fixed', RESOLUTION_DATE = sysdate where DESCRIPTION is null;
+        pv_rows := TO_CHAR(SQL%RowCount);
+
+        update bad_complaints set COMPLAINTTYPE='L', STATUS ='fixed', RESOLUTION_DATE = sysdate where COMPLAINTTYPE is null and DESCRIPTION ='late';
+        pv_rows := pv_rows + TO_CHAR(SQL%RowCount);
+
+        update bad_complaints set COMPLAINTTYPE='C', STATUS ='fixed', RESOLUTION_DATE = sysdate  where (COMPLAINTTYPE='A' OR COMPLAINTTYPE='B') and DESCRIPTION ='cancelled';
+        pv_rows := pv_rows + TO_CHAR(SQL%RowCount);
+end;
+-----------------------------------------------------
+--EXECUTE Complain Table Reclean PROCEDURE--
+ 
+DECLARE 
+noOfRows NUMBER(5,2);
+begin
+reclean_complaint_bad_data(noOfRows);
+DBMS_OUTPUT.PUT_LINE('No of bad data cleaned: '||noOfRows);
+END;
+
+-----------------------------------------------------
+--Transfering recleaned Complaint bad data to good table
+
+create or replace procedure RECLEANED_COMPLAINT_DATA_MERGE
+as 
+begin
+MERGE INTO good_complaints C
+ USING bad_complaints B
+ ON (C.COMPLAINTKEY = B.COMPLAINTKEY)
+WHEN MATCHED THEN
+ UPDATE SET 
+C.COMPLAINTID = B.COMPLAINTID,
+C.COMPLAINTTYPE = B.COMPLAINTTYPE,
+C.DESCRIPTION=B.DESCRIPTION,
+C.COMPLAINTSTATUS=B.COMPLAINTSTATUS,
+C.FLIGHT_KEY = B.FLIGHT_KEY,
+C.DBSOURCE=B.DBSOURCE
+
+WHEN NOT MATCHED THEN
+  INSERT VALUES
+(B.COMPLAINTKEY, B.COMPLAINTID, B.COMPLAINTTYPE, B.DESCRIPTION, B.COMPLAINTSTATUS, B.FLIGHT_KEY, B.DBSOURCE);
+END;
+
+begin 
+RECLEANED_COMPLAINT_DATA_MERGE;
+end;
+----------------------------------------------------
+
+--Reclean bad data in Compensation bad table--
+
+create or replace procedure reclean_compensation_bad_data(pv_rows OUT NUMBER)
+IS
+BEGIN
+pv_rows := 0;
+
+        update bad_compensation set COMPENSATION_TYPE ='unknown', STATUS ='fixed', RESOLUTION_DATE = sysdate where COMPENSATION_TYPE is null;
+        pv_rows := TO_CHAR(SQL%RowCount);
+
+        update bad_compensation set COMPENSATION_TYPE='rebooked', STATUS ='fixed', RESOLUTION_DATE = sysdate where REGEXP_LIKE (COMPENSATION_TYPE, '^reb(ook)$');
+        pv_rows := pv_rows + TO_CHAR(SQL%RowCount);
+
+end;
+-----------------------------------------------------
+--EXECUTE Compensation Table PROCEDURE--
+ 
+DECLARE 
+noOfRows NUMBER(5,2);
+begin
+reclean_compensation_bad_data(noOfRows);
+DBMS_OUTPUT.PUT_LINE('No of bad data cleaned: '||noOfRows);
+END;
+
+-----------------------------------------------------
+--Transferring recleaned bad Compensation data to good table
+
+create or replace procedure RECLEANED_COMPENSATION_DATA_MERGE
+as 
+begin
+MERGE INTO good_compensation C
+ USING bad_compensation B
+ ON (C.COMPENSATIONKEY = B.COMPENSATIONKEY)
+WHEN MATCHED THEN
+ UPDATE SET 
+C.COMPENSATION_AMNT = B.COMPENSATION_AMNT,
+C.COMPENSATION_TYPE = B.COMPENSATION_TYPE,
+C.FLIGHT_KEY = B.FLIGHT_KEY,
+C.DBSOURCE=B.DBSOURCE
+
+WHEN NOT MATCHED THEN
+  INSERT VALUES
+(B.COMPENSATIONKEY, B.COMPENSATION_AMNT, B.COMPENSATION_TYPE, B.FLIGHT_KEY, B.DBSOURCE);
+END;
+
+begin 
+RECLEANED_COMPENSATION_DATA_MERGE;
+end;
+----------------------------------------------------

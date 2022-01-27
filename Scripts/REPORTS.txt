@@ -1,0 +1,36 @@
+--Identify the airlines with most complaints--
+
+SELECT df.flightno, sum(noofcomplaints)
+FROM
+(SELECT df.flightno, sum(noofcomplaints) as NoOfComplaints,
+        RANK() OVER (ORDER BY count(noofcomplaints) DESC) AS Rank
+   FROM fact_complaints f, dim_flights df
+WHERE f.fk4_flightkey = df.flightkey
+ GROUP BY  df.flightno) df
+WHERE Rank <= 5
+GROUP BY df.flightno;
+--The no. of complaints per flight--
+SELECT count(f.noofcomplaints), df.flightno 
+FROM fact_complaints f, dim_flights df
+WHERE f.fk4_flightkey = df.flightkey
+GROUP BY df.flightno 
+ORDER BY count(f.noofcomplaints) DESC
+
+--Total amount of compensation given each month in the year 2017--
+SELECT sum(totalcompensation), t.month
+FROM fact_complaints f, dim_time t
+WHERE f.fk1_timeid = t.timeid  
+GROUP BY  t.month;
+
+--The no. of complaints per flight per month in the year 2017--
+SELECT count(NOOFCOMPLAINTS), t.month, df.flightno
+FROM fact_complaints f, dim_time t, dim_flights df
+WHERE f.fk1_timeid = t.timeid  AND f.fk4_flightkey = df.flightkey
+GROUP BY  t.month, df.flightno;
+
+--The total number of compensation given in 2017, according to the type of complaints--
+SELECT COUNT(totalcompensation), c.complainttype
+FROM fact_complaints f, dim_complaints c
+WHERE f.fk3_complaintkey = c.complaintkey 
+GROUP BY c.complainttype;
+
